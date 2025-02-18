@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { clearToken, getToken } from './token'
+import router from '@/router'
 
 const request = axios.create({
   baseURL: 'http://geek.itheima.net/v1_0',
@@ -7,7 +9,11 @@ const request = axios.create({
 
 // 添加请求拦截器
 request.interceptors.request.use((config)=> {
-    return config
+  const token = getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
   }, (error)=> {
     return Promise.reject(error)
 })
@@ -20,6 +26,11 @@ request.interceptors.response.use((response)=> {
   }, (error)=> {
     // 超出 2xx 范围的状态码都会触发该函数。
     // 对响应错误做点什么
+    if(error.response.status===401){
+      clearToken()
+      router.navigate('./login')
+      window.location.reload()
+    }
     return Promise.reject(error)
 })
 
