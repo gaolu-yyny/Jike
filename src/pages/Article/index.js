@@ -1,12 +1,12 @@
-import { Link } from 'react-router-dom'
-import { Card, Breadcrumb, Form, Button, Radio, DatePicker, Select } from 'antd'
+import { Link, useNavigate } from 'react-router-dom'
+import { Card, Breadcrumb, Form, Button, Radio, DatePicker, Select,Popconfirm } from 'antd'
 import locale from 'antd/es/date-picker/locale/zh_CN'
 import { Table, Tag, Space } from 'antd'
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import img404 from '@/assets/error.png'
 import { useChannels } from '../Home/component/hooks/useChannels'
 import { useEffect, useState } from 'react'
-import {getArticleListAPI} from '../../api/article'
+import {getArticleListAPI,delArticleAPI} from '../../api/article'
 
 const { Option } = Select
 const { RangePicker } = DatePicker
@@ -21,18 +21,62 @@ const Article = () => {
     list:[],
     count:0
   })
-  
+
+  const[reqData,setReqData]=useState({
+    page: 1,
+    per_page: 4,
+    begin_pubdate: '',
+    end_pubdate: '',
+    status: '',
+    channel_id: ''
+  })
+
+  async function getList(reqData){
+    const re=await getArticleListAPI(reqData)
+    const{results,total_count}=re.data
+    setArticle({
+      list:results,
+      count:total_count
+  })
+  }
+
   useEffect(()=>{
-    async function getList(){
-      const re=await getArticleListAPI()
-      const{results,total_count}=re.data
-      setArticle({
-        list:results,
-        count:total_count
+    getList(reqData)
+  },[reqData])
+
+  
+
+
+  //根据时间进行筛选
+  const onFinish = formValue=> {
+    // 1. 准备参数
+    setReqData({
+      ...reqData,
+      channel_id:formValue.channel_id,
+      status:formValue.status,
+      begin_pubdate: formValue.date[0].format('YYYY-MM-DD'),
+      end_pubdate: formValue.date[1].format('YYYY-MM-DD'),
+
     })
-    }
-    getList()
-  },[])
+    // 2. 使用参数获取新的列表
+  }
+
+  const pageChange=(page)=>{
+    setReqData({
+      ...reqData,
+      page
+    })
+  }
+
+  const onConfirm=async(data)=>{
+    // console.log(data.id);
+    await delArticleAPI(data.id)
+    setReqData({
+      ...reqData
+    })
+  }
+
+  const navagite=useNavigate()
 
   const columns = [
     {
@@ -74,13 +118,24 @@ const Article = () => {
       render: data => {
         return (
           <Space size="middle">
-            <Button type="primary" shape="circle" icon={<EditOutlined />} />
-            <Button
-              type="primary"
-              danger
-              shape="circle"
-              icon={<DeleteOutlined />}
+            <Button type="primary" shape="circle" icon={<EditOutlined /> } 
+            onClick={() => navagite(`/publish?id=${data.id}`)}
             />
+
+            <Popconfirm
+              title="确认删除该条文章吗?"
+              onConfirm={()=>{onConfirm(data)}}
+              okText="确认"
+              cancelText="取消"
+            >
+              <Button
+                type="primary"
+                danger
+                shape="circle"
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+
           </Space>
         )
       }
@@ -100,7 +155,7 @@ const Article = () => {
         }
         style={{ marginBottom: 20 }}
       >
-        <Form initialValues={{ status: '' }}>
+        <Form initialValues={{ status: '' }} onFinish={onFinish}>
           <Form.Item label="状态" name="status">
             <Radio.Group>
               <Radio value={''}>全部</Radio>
@@ -133,7 +188,12 @@ const Article = () => {
       </Card>
 
       <Card title={`根据筛选条件共查询到 ${article.count} 条结果：`}>
-        <Table rowKey="id" columns={columns} dataSource={article.list} />
+        <Table rowKey="id" columns={columns} dataSource={article.list}  pagination={{
+          current: reqData.page,
+          pageSize: reqData.per_page,
+          onChange: pageChange,
+          total: article.count
+        }} />
       </Card>
 
     </div>
