@@ -5,8 +5,9 @@ import { Table, Tag, Space } from 'antd'
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import img404 from '@/assets/error.png'
 import { useChannels } from '../Home/component/hooks/useChannels'
-import { useEffect, useState } from 'react'
+import { useEffect, useState,useMemo,useCallback } from 'react'
 import {getArticleListAPI,delArticleAPI} from '../../api/article'
+import { debounce } from 'lodash' 
 
 const { Option } = Select
 const { RangePicker } = DatePicker
@@ -31,41 +32,51 @@ const Article = () => {
     channel_id: ''
   })
 
-  async function getList(reqData){
-    const re=await getArticleListAPI(reqData)
-    const{results,total_count}=re.data
-    setArticle({
-      list:results,
-      count:total_count
-  })
-  }
+    // 使用 useCallback 缓存 getList 函数
+    const getList = useCallback(async (reqData) => {
+      const re = await getArticleListAPI(reqData);
+      const { results, total_count } = re.data;
+      setArticle({
+        list: results,
+        count: total_count
+      });
+    }, [setArticle]); // setArticle 作为依赖项，因为它是 setState 函数
 
-  useEffect(()=>{
-    getList(reqData)
-  },[reqData])
+    // 防抖函数：确保筛选条件改变后，延迟请求
+    const debouncedGetList = useMemo(
+      () => debounce((newReqData) => {
+        console.log('Request sent at:', new Date().toLocaleTimeString());
+        getList(newReqData);
+      }, 500),
+      [getList] // 依赖 getList
+    )
 
+    useEffect(() => {
+      debouncedGetList(reqData);
+      return () => debouncedGetList.cancel();
+    }, [reqData, debouncedGetList]);
   
-
 
   //根据时间进行筛选
   const onFinish = formValue=> {
     // 1. 准备参数
-    setReqData({
+    const newReqData = {
       ...reqData,
-      channel_id:formValue.channel_id,
-      status:formValue.status,
+      channel_id: formValue.channel_id,
+      status: formValue.status,
       begin_pubdate: formValue.date[0].format('YYYY-MM-DD'),
-      end_pubdate: formValue.date[1].format('YYYY-MM-DD'),
-
-    })
-    // 2. 使用参数获取新的列表
+      end_pubdate: formValue.date[1].format('YYYY-MM-DD')
+    }
+    // 使用防抖函数
+    setReqData(newReqData)
+    debouncedGetList(newReqData)  // 调用防抖函数
+    
   }
 
   const pageChange=(page)=>{
-    setReqData({
-      ...reqData,
-      page
-    })
+    const newReqData = { ...reqData, page }
+    setReqData(newReqData)
+    debouncedGetList(newReqData)  // 调用防抖函数
   }
 
   const onConfirm=async(data)=>{
